@@ -118,13 +118,22 @@ class QDivedeLearner:
         q_td_error = (chosen_action_qvals - target_max_qvals.detach()) #(B,T,n_agents)
 
         q_mask = batch["filled"][:, :-1].float().repeat(1, 1, self.args.n_agents) #(B,T,n_agents)
-        q_mask[:, 1:] = q_mask[:, 1:] * (1 - indi_terminated[:, :-1])
+        q_mask[:, 1:] = q_mask[:, 1:] * (1 - indi_terminated[:, :-1]) * (1 - terminated[:, :-1]).repeat(1, 1, self.args.n_agents)
+        # q_mask[:, 1:] = q_mask[:, 1:] * (1 - indi_terminated[:, :-1])
         q_mask = q_mask.expand_as(q_td_error)
 
         q_selected_weight = self.select_trajectory(batch)
         # 0-out the targets that came from padded data
         q_masked_td_error = q_td_error * q_mask * q_selected_weight
 
+        if (target_max_qvals * q_mask).min().item()<-10:
+            print((target_max_qvals * q_mask).min().item())
+            print("q_mask",q_mask)
+            print("indi_terminated",indi_terminated)
+            print("terminated",terminated)
+            print("target_max_qvals",target_max_qvals)
+            print("q_masked_target_max_qvals",target_max_qvals * q_mask)
+            
         # Normal L2 loss, take mean over actual data
         q_loss = (q_masked_td_error ** 2).sum() / q_mask.sum()
 

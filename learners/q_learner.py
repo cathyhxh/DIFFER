@@ -43,10 +43,10 @@ class QLearner:
         mask[:, 1:] = mask[:, 1:] * (1 - terminated[:, :-1])
         avail_actions = batch["avail_actions"] #(B,T,n_agents,n_actions)
         # print("batch['indi_terminated']")
-        B=rewards.shape[0]
-        print("filled",batch["filled"][:, :-1].reshape(B,-1),batch["filled"][:, :-1].shape)
-        print("mask",mask.reshape(B,-1),mask.shape)
-        print("terminated",terminated.reshape(B,-1),terminated.shape)
+        # B=rewards.shape[0]
+        # print("filled",batch["filled"][:, :-1].reshape(B,-1),batch["filled"][:, :-1].shape)
+        # print("mask",mask.reshape(B,-1),mask.shape)
+        # print("terminated",terminated.reshape(B,-1),terminated.shape)
         # Calculate estimated Q-Values
         mac_out = []
         self.mac.init_hidden(batch.batch_size)
@@ -78,6 +78,7 @@ class QLearner:
             mac_out_detach[avail_actions == 0] = -9999999
             cur_max_actions = mac_out_detach[:, 1:].max(dim=3, keepdim=True)[1]
             target_max_qvals = th.gather(target_mac_out, 3, cur_max_actions).squeeze(3)
+            print('target_max_qvals',target_max_qvals.mean(),target_max_qvals.max(),target_max_qvals.min() )
         else:
             target_max_qvals = target_mac_out.max(dim=3)[0]
 
