@@ -42,7 +42,7 @@ class QDivedeLearner:
         mask = batch["filled"][:, :-1].float()
         mask[:, 1:] = mask[:, 1:] * (1 - terminated[:, :-1])
         avail_actions = batch["avail_actions"]
-        indi_terminated = batch["indi_terminated"][:, :-1]
+        indi_terminated = batch["indi_terminated"][:, :-1].float()
 
         # Calculate estimated Q-Values
         mac_out = []
@@ -102,10 +102,12 @@ class QDivedeLearner:
 
         # Optimise
         self.mixer_optimiser.zero_grad()
-        chosen_action_qvals_clone.retain_grad()
+        chosen_action_qvals_clone.retain_grad() #the grad of qi
+        chosen_action_q_tot_vals.retain_grad() #the grad of qtot
         mixer_loss.backward()
-        grad_qtot_qi = chosen_action_qvals_clone.grad #(B,T,n_agents)
-        # print('grad_qtot_qi',grad_qtot_qi)
+        # print('shape',chosen_action_qvals_clone.grad.shape, chosen_action_q_tot_vals.grad.shape)
+        grad_qtot_qi = chosen_action_qvals_clone.grad/ chosen_action_q_tot_vals.grad.repeat(1, 1, self.args.n_agents) #(B,T,n_agents)
+        # print('grad_qtot_qi',grad_qtot_qi.shape)
         mixer_grad_norm = th.nn.utils.clip_grad_norm_(self.mixer_params, self.args.grad_norm_clip)
         self.mixer_optimiser.step()
 
@@ -133,7 +135,7 @@ class QDivedeLearner:
             print("terminated",terminated)
             print("target_max_qvals",target_max_qvals)
             print("q_masked_target_max_qvals",target_max_qvals * q_mask)
-            
+
         # Normal L2 loss, take mean over actual data
         q_loss = (q_masked_td_error ** 2).sum() / q_mask.sum()
 

@@ -78,7 +78,6 @@ class QLearner:
             mac_out_detach[avail_actions == 0] = -9999999
             cur_max_actions = mac_out_detach[:, 1:].max(dim=3, keepdim=True)[1]
             target_max_qvals = th.gather(target_mac_out, 3, cur_max_actions).squeeze(3)
-            print('target_max_qvals',target_max_qvals.mean(),target_max_qvals.max(),target_max_qvals.min() )
         else:
             target_max_qvals = target_mac_out.max(dim=3)[0]
 
@@ -106,7 +105,8 @@ class QLearner:
         chosen_action_qvals.retain_grad()
         loss.backward()
         # print("chosen_action_qvals.grad",chosen_action_qvals.grad) #(B,T,n_agents)
-        
+        mask_target = target_max_qvals*mask.repeat(1,1, self.args.n_agents)
+        print('target_max_qvals',mask_target.mean(),mask_target.max(),mask_target.min() )
         grad_norm = th.nn.utils.clip_grad_norm_(self.params, self.args.grad_norm_clip)
         self.optimiser.step()
 
