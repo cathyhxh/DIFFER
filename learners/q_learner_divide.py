@@ -105,19 +105,22 @@ class QDivedeLearner:
         chosen_action_qvals_clone.retain_grad() #the grad of qi
         chosen_action_q_tot_vals.retain_grad() #the grad of qtot
         mixer_loss.backward()
-        # print('shape',chosen_action_qvals_clone.grad.shape, chosen_action_q_tot_vals.grad.shape)
-        grad_qtot_qi = chosen_action_qvals_clone.grad/ chosen_action_q_tot_vals.grad.repeat(1, 1, self.args.n_agents) #(B,T,n_agents)
-        # print('grad_qtot_qi',grad_qtot_qi.shape)
+
+        grad_l_qtot = chosen_action_q_tot_vals.grad.repeat(1, 1, self.args.n_agents) + 1e-8
+        grad_l_qi = chosen_action_qvals_clone.grad
+        grad_qtot_qi = th.clamp(grad_l_qi/ grad_l_qtot, min=-10, max=10)#(B,T,n_agents)
+
         mixer_grad_norm = th.nn.utils.clip_grad_norm_(self.mixer_params, self.args.grad_norm_clip)
         self.mixer_optimiser.step()
 
         q_rewards = self.cal_indi_reward(grad_qtot_qi, td_error, chosen_action_qvals, target_max_qvals, indi_terminated) #(B,T,n_agents)
+        q_rewards_clone = q_rewards.clone().detach()
 
         # Calculate 1-step Q-Learning targets
-        q_targets = q_rewards + self.args.gamma * (1 - indi_terminated) * target_max_qvals #(B,T,n_agents)
+        q_targets = q_rewards_clone + self.args.gamma * (1 - indi_terminated) * target_max_qvals #(B,T,n_agents)
 
         # Td-error
-        q_td_error = (chosen_action_qvals - target_max_qvals.detach()) #(B,T,n_agents)
+        q_td_error = (chosen_action_qvals - q_targets.detach()) #(B,T,n_agents)
 
         q_mask = batch["filled"][:, :-1].float().repeat(1, 1, self.args.n_agents) #(B,T,n_agents)
         q_mask[:, 1:] = q_mask[:, 1:] * (1 - indi_terminated[:, :-1]) * (1 - terminated[:, :-1]).repeat(1, 1, self.args.n_agents)
