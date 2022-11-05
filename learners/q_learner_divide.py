@@ -128,20 +128,12 @@ class QDivedeLearner:
         q_mask = q_mask.expand_as(q_td_error)
 
         masked_q_td_error = q_td_error * q_mask 
-        q_selected_weight = self.select_trajectory(masked_q_td_error)
+        q_selected_weight = self.select_trajectory(masked_q_td_error.abs(), q_mask.sum().item()).clone().detach()
         # 0-out the targets that came from padded data
         final_q_td_error = masked_q_td_error * q_selected_weight
 
-        if (target_max_qvals * q_mask).min().item()<-10:
-            print((target_max_qvals * q_mask).min().item())
-            print("q_mask",q_mask)
-            print("indi_terminated",indi_terminated)
-            print("terminated",terminated)
-            print("target_max_qvals",target_max_qvals)
-            print("q_masked_target_max_qvals",target_max_qvals * q_mask)
-
         # Normal L2 loss, take mean over actual data
-        q_loss = (final_q_td_error ** 2).sum() / q_mask.sum()
+        q_loss = (final_q_td_error ** 2).sum() / (q_selected_weight * q_mask).sum()
 
         # Optimise
         self.q_optimiser.zero_grad()
@@ -178,19 +170,17 @@ class QDivedeLearner:
         reward_i = - grad_td + qi - self.args.gamma * (1 - indi_terminated) * target_qi
         return reward_i
 
-    def select_trajectory(self, td_error):
+    def select_trajectory(self, td_error, valid_num):
+        # td_error (B, T, n_agents)
         if self.args.selected == 'all':
             return th.ones_like(td_error).cuda()
         elif self.args.selected == 'greedy':
-            B = td_error.shape[0]
-            T = td_error.shape[1]
-            no_selected_num = int(B * self.args.n_agents * (1-self.args.selected_ratio))
-            traj_td = td_error.mean(dim=1)
-            traj_td_reshape = traj_td.reshape(-1)
-            sorted_td, _ = th.sort(traj_td_reshape)
-            pivot = sorted_td[no_selected_num]
-            weight = th.where(traj_td>pivot, th.ones_like(traj_td), th.zeros_like(traj_td))
-            return weight.unsqueeze(1).repeat(1, T, 1)
+            selected_num = int(valid_num * self.args.selected_ratio)
+            td_reshape = td_error.reshape(-1)
+            sorted_td, _ = th.sort(td_reshape,descending=True)
+            pivot = sorted_td[selected_num]
+            weight = th.where(td_error>pivot, th.ones_like(td_error), th.zeros_like(td_error))
+            return weight
         return th.ones(B,T,self.args.n_agents).cuda()
 
     def _update_targets(self):
