@@ -1,3 +1,4 @@
 tb_logs/
 results/
 *.pyc
+*.txt

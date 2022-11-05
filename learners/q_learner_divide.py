@@ -127,7 +127,7 @@ class QDivedeLearner:
         # q_mask[:, 1:] = q_mask[:, 1:] * (1 - indi_terminated[:, :-1])
         q_mask = q_mask.expand_as(q_td_error)
 
-        q_selected_weight = self.select_trajectory(batch)
+        q_selected_weight = self.select_trajectory(q_td_error)
         # 0-out the targets that came from padded data
         q_masked_td_error = q_td_error * q_mask * q_selected_weight
 
@@ -177,9 +177,19 @@ class QDivedeLearner:
         reward_i = - grad_td + qi - self.args.gamma * (1 - indi_terminated) * target_qi
         return reward_i
 
-    def select_trajectory(self, batch: EpisodeBatch):
-        B = batch["actions"].shape[0]
-        T = batch["actions"].shape[1] - 1
+    def select_trajectory(self, td_error):
+        if self.args.selected == 'all':
+            return th.ones_like(td_error).cuda()
+        elif self.args.selected == 'greedy':
+            B = td_error.shape[0]
+            T = td_error.shape[1]
+            no_selected_num = int(B * self.args.n_agents * (1-self.args.selected_ratio))
+            traj_td = td_error.mean(dim=1)
+            traj_td_reshape = traj_td.reshape(-1)
+            sorted_td, _ = th.sort(traj_td_reshape)
+            pivot = sorted_td[no_selected_num]
+            weight = th.where(traj_td>=pivot, th.ones_like(traj_td), th.zeros_like(traj_td))
+            return weight.unsqueeze(1).repeat(1, T, 1)
         return th.ones(B,T,self.args.n_agents).cuda()
 
     def _update_targets(self):
