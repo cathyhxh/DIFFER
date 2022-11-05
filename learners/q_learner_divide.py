@@ -127,9 +127,10 @@ class QDivedeLearner:
         # q_mask[:, 1:] = q_mask[:, 1:] * (1 - indi_terminated[:, :-1])
         q_mask = q_mask.expand_as(q_td_error)
 
-        q_selected_weight = self.select_trajectory(q_td_error)
+        masked_q_td_error = q_td_error * q_mask 
+        q_selected_weight = self.select_trajectory(masked_q_td_error)
         # 0-out the targets that came from padded data
-        q_masked_td_error = q_td_error * q_mask * q_selected_weight
+        final_q_td_error = masked_q_td_error * q_selected_weight
 
         if (target_max_qvals * q_mask).min().item()<-10:
             print((target_max_qvals * q_mask).min().item())
@@ -140,7 +141,7 @@ class QDivedeLearner:
             print("q_masked_target_max_qvals",target_max_qvals * q_mask)
 
         # Normal L2 loss, take mean over actual data
-        q_loss = (q_masked_td_error ** 2).sum() / q_mask.sum()
+        q_loss = (final_q_td_error ** 2).sum() / q_mask.sum()
 
         # Optimise
         self.q_optimiser.zero_grad()
@@ -162,7 +163,7 @@ class QDivedeLearner:
             self.logger.log_stat("q_loss", q_loss.item(), t_env)
             self.logger.log_stat("q_grad_norm", q_grad_norm, t_env)
             q_mask_elems = q_mask.sum().item()
-            self.logger.log_stat("q_td_error_abs", (q_masked_td_error.abs().sum().item()/q_mask_elems), t_env)
+            self.logger.log_stat("q_td_error_abs", (final_q_td_error.abs().sum().item()/q_mask_elems), t_env)
             self.logger.log_stat("q_q_taken_mean", (chosen_action_qvals * q_mask).sum().item()/(q_mask_elems), t_env)
             self.logger.log_stat("mixer_target_mean", (q_targets * q_mask).sum().item()/(q_mask_elems), t_env)
             self.logger.log_stat("reward_i_mean", (q_rewards * q_mask).sum().item()/(q_mask_elems), t_env)
@@ -188,7 +189,7 @@ class QDivedeLearner:
             traj_td_reshape = traj_td.reshape(-1)
             sorted_td, _ = th.sort(traj_td_reshape)
             pivot = sorted_td[no_selected_num]
-            weight = th.where(traj_td>=pivot, th.ones_like(traj_td), th.zeros_like(traj_td))
+            weight = th.where(traj_td>pivot, th.ones_like(traj_td), th.zeros_like(traj_td))
             return weight.unsqueeze(1).repeat(1, T, 1)
         return th.ones(B,T,self.args.n_agents).cuda()
 
