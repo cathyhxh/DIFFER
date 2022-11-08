@@ -4,6 +4,7 @@ from modules.mixers.vdn import VDNMixer
 from modules.mixers.qmix import QMixer
 import torch as th
 from torch.optim import RMSprop
+from ER.PER.prioritized_memory import PER_Memory
 
 
 class QDivedeLearner:
@@ -128,7 +129,7 @@ class QDivedeLearner:
         q_mask = q_mask.expand_as(q_td_error)
 
         masked_q_td_error = q_td_error * q_mask 
-        q_selected_weight = self.select_trajectory(masked_q_td_error.abs(), q_mask.sum().item()).clone().detach()
+        q_selected_weight = self.select_trajectory(masked_q_td_error.abs(), q_mask).clone().detach()
         # 0-out the targets that came from padded data
         final_q_td_error = masked_q_td_error * q_selected_weight
 
@@ -170,16 +171,32 @@ class QDivedeLearner:
         reward_i = - grad_td + qi - self.args.gamma * (1 - indi_terminated) * target_qi
         return reward_i
 
-    def select_trajectory(self, td_error, valid_num):
+    def select_trajectory(self, td_error, mask):
         # td_error (B, T, n_agents)
         if self.args.selected == 'all':
             return th.ones_like(td_error).cuda()
         elif self.args.selected == 'greedy':
+            valid_num = mask.sum().item()
             selected_num = int(valid_num * self.args.selected_ratio)
             td_reshape = td_error.reshape(-1)
-            sorted_td, _ = th.sort(td_reshape,descending=True)
-            pivot = sorted_td[selected_num]
+            sorted_td, _ = th.topk(td_reshape, selected_num)
+            pivot = sorted_td[-1]
             weight = th.where(td_error>pivot, th.ones_like(td_error), th.zeros_like(td_error))
+            return weight
+        elif self.args.selected == 'PER':
+            memory_size = int(mask.sum().item())
+            memory = PER_Memory(memory_size)
+            for b in range(mask.shape[0]):
+                for t in range(mask.shape[1]):
+                    for na in range(mask.shape[2]):
+                        pos = (b,t,na)
+                        if mask[pos] == 1:
+                            memory.add(td_error[pos].cpu().detach(),pos)
+            selected_num = int(memory_size * self.args.selected_ratio)
+            mini_batch, _, is_weights = memory.sample(selected_num)
+            weight = th.ones_like(td_error)
+            for idxs, pos in enumerate(mini_batch):
+                weight[pos] = is_weights[idxs]
             return weight
         return th.ones(B,T,self.args.n_agents).cuda()
 

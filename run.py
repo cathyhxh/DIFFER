@@ -84,6 +84,7 @@ def run_sequential(args, logger):
     args.n_actions = env_info["n_actions"]
     args.state_shape = env_info["state_shape"]
 
+
     # Default/Base scheme
     scheme = {
         "state": {"vshape": env_info["state_shape"]},
