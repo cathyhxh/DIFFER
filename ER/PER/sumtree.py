@@ -1,66 +1,73 @@
-import numpy
+import numpy as np
 
 
-# SumTree
-# a binary tree data structure where the parent’s value is the sum of its children
-class SumTree:
-    write = 0
+class SumTree(object):
+    """
+    This SumTree code is a modified version and the original code is from:
+    https://github.com/jaara/AI-blog/blob/master/SumTree.py
+
+    Story data with its priority in the tree.
+    """
+    data_pointer = 0
 
     def __init__(self, capacity):
-        self.capacity = capacity
-        self.tree = numpy.zeros(2 * capacity - 1)
-        self.data = numpy.zeros(capacity, dtype=object)
-        self.n_entries = 0
+        self.capacity = capacity  # for all priority values
+        self.tree = np.zeros(2 * capacity - 1)
+        # [--------------Parent nodes-------------][-------leaves to recode priority-------]
+        #             size: capacity - 1                       size: capacity
+        self.data = np.zeros(capacity, dtype=object)  # for all transitions
+        # [--------------data frame-------------]
+        #             size: capacity
 
-    # update to the root node
-    def _propagate(self, idx, change):
-        parent = (idx - 1) // 2
-
-        self.tree[parent] += change
-
-        if parent != 0:
-            self._propagate(parent, change)
-
-    # find sample on leaf node
-    def _retrieve(self, idx, s):
-        left = 2 * idx + 1
-        right = left + 1
-
-        if left >= len(self.tree):
-            return idx
-
-        if s <= self.tree[left]:
-            return self._retrieve(left, s)
-        else:
-            return self._retrieve(right, s - self.tree[left])
-
-    def total(self):
-        return self.tree[0]
-
-    # store priority and sample
     def add(self, p, data):
-        idx = self.write + self.capacity - 1
+        tree_idx = self.data_pointer + self.capacity - 1
+        self.data[self.data_pointer] = data  # update data_frame
+        self.update(tree_idx, p)  # update tree_frame
 
-        self.data[self.write] = data
-        self.update(idx, p)
+        self.data_pointer += 1
+        if self.data_pointer >= self.capacity:  # replace when exceed the capacity
+            self.data_pointer = 0
+    
+    def update(self, tree_idx, p):
+        change = p - self.tree[tree_idx]
+        self.tree[tree_idx] = p
+        # then propagate the change through tree
+        while tree_idx != 0:    # this method is faster than the recursive loop in the reference code
+            tree_idx = (tree_idx - 1) // 2
+            self.tree[tree_idx] += change
 
-        self.write += 1
-        if self.write >= self.capacity:
-            self.write = 0
+    def get_leaf(self, v):
+        """
+        Tree structure and array storage:
 
-        if self.n_entries < self.capacity:
-            self.n_entries += 1
+        Tree index:
+             0         -> storing priority sum
+            / \
+          1     2
+         / \   / \
+        3   4 5   6    -> storing priority for transitions
 
-    # update priority
-    def update(self, idx, p):
-        change = p - self.tree[idx]
+        Array type for storing:
+        [0,1,2,3,4,5,6]
+        """
+        parent_idx = 0
+        while True:     # the while loop is faster than the method in the reference code
+            cl_idx = 2 * parent_idx + 1         # this leaf's left and right kids
+            cr_idx = cl_idx + 1
+            if cl_idx >= len(self.tree):        # reach bottom, end search
+                leaf_idx = parent_idx
+                break
+            else:       # downward search, always search for a higher priority node
+                if v <= self.tree[cl_idx]:
+                    parent_idx = cl_idx
+                else:
+                    v -= self.tree[cl_idx]
+                    parent_idx = cr_idx
 
-        self.tree[idx] = p
-        self._propagate(idx, change)
+        data_idx = leaf_idx - self.capacity + 1
+        return leaf_idx, self.tree[leaf_idx], self.data[data_idx]
 
-    # get priority and sample
-    def get(self, s):
-        idx = self._retrieve(0, s)
-        dataIdx = idx - self.capacity + 1
+    @property
+    def total_p(self):
+        return self.tree[0]  # the root
 
-        return (idx, self.tree[idx], self.data[dataIdx])

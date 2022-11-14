@@ -155,7 +155,7 @@ class QDivedeLearner:
             self.logger.log_stat("q_loss", q_loss.item(), t_env)
             self.logger.log_stat("q_grad_norm", q_grad_norm, t_env)
             q_mask_elems = q_mask.sum().item()
-            self.logger.log_stat("q_td_error_abs", (final_q_td_error.abs().sum().item()/q_mask_elems), t_env)
+            self.logger.log_stat("q_td_error_abs", (masked_q_td_error.abs().sum().item()/q_mask_elems), t_env)
             self.logger.log_stat("q_q_taken_mean", (chosen_action_qvals * q_mask).sum().item()/(q_mask_elems), t_env)
             self.logger.log_stat("mixer_target_mean", (q_targets * q_mask).sum().item()/(q_mask_elems), t_env)
             self.logger.log_stat("reward_i_mean", (q_rewards * q_mask).sum().item()/(q_mask_elems), t_env)
@@ -190,12 +190,12 @@ class QDivedeLearner:
                     for na in range(mask.shape[2]):
                         pos = (b,t,na)
                         if mask[pos] == 1:
-                            memory.add(td_error[pos].cpu().detach(),pos)
+                            memory.store(td_error[pos].cpu().detach(),pos)
             selected_num = int(memory_size * self.args.selected_ratio)
-            mini_batch, _, is_weights = memory.sample(selected_num)
-            weight = th.ones_like(td_error)
-            for idxs, pos in enumerate(mini_batch):
-                weight[pos] = is_weights[idxs]
+            mini_batch, selected_pos, is_weight = memory.sample(selected_num)
+            weight = th.zeros_like(td_error)
+            for idxs, pos in enumerate(selected_pos):
+                weight[pos] += is_weight[idxs]
             return weight
         return th.ones(B,T,self.args.n_agents).cuda()
 
