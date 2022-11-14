@@ -131,10 +131,9 @@ class QDivedeLearner:
         masked_q_td_error = q_td_error * q_mask 
         q_selected_weight = self.select_trajectory(masked_q_td_error.abs(), q_mask).clone().detach()
         # 0-out the targets that came from padded data
-        final_q_td_error = masked_q_td_error * q_selected_weight
 
         # Normal L2 loss, take mean over actual data
-        q_loss = (final_q_td_error ** 2).sum() / (q_selected_weight * q_mask).sum()
+        q_loss = (masked_q_td_error ** 2 * q_selected_weight).sum() / q_mask.sum()
 
         # Optimise
         self.q_optimiser.zero_grad()
