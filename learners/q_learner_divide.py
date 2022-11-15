@@ -180,7 +180,7 @@ class QDivedeLearner:
             td_reshape = td_error.reshape(-1)
             sorted_td, _ = th.topk(td_reshape, selected_num)
             pivot = sorted_td[-1]
-            weight = th.where(td_error>pivot, th.ones_like(td_error), th.zeros_like(td_error))
+            weight = th.where(td_error>=pivot, th.ones_like(td_error), th.zeros_like(td_error))
             return weight
         elif self.args.selected == 'PER':
             memory_size = int(mask.sum().item())
