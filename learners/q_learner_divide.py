@@ -211,7 +211,6 @@ class QDivedeLearner:
             weight = th.zeros_like(td_error)
             for idxs, pos in enumerate(selected_pos):
                 weight[pos] = 1
-            print('weight',weight.sum(),weight)
             return weight
         return th.ones(B,T,self.args.n_agents).cuda()
 
