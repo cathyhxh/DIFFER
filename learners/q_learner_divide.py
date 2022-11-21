@@ -197,21 +197,25 @@ class QDivedeLearner:
             for idxs, pos in enumerate(selected_pos):
                 weight[pos] += is_weight[idxs]
             return weight
+        # elif self.args.selected == 'PER_hard':
+        #     memory_size = int(mask.sum().item())
+        #     memory = PER_Memory(memory_size)
+        #     for b in range(mask.shape[0]):
+        #         for t in range(mask.shape[1]):
+        #             for na in range(mask.shape[2]):
+        #                 pos = (b,t,na)
+        #                 if mask[pos] == 1:
+        #                     memory.store(td_error[pos].cpu().detach(),pos)
+        #     selected_num = int(memory_size * self.args.selected_ratio)
+        #     mini_batch, selected_pos, _ = memory.sample(selected_num)
+        #     weight = th.zeros_like(td_error)
+        #     for idxs, pos in enumerate(selected_pos):
+        #         weight[pos] = 1
+        #     return weight
         elif self.args.selected == 'PER_hard':
             memory_size = int(mask.sum().item())
-            memory = PER_Memory(memory_size)
-            for b in range(mask.shape[0]):
-                for t in range(mask.shape[1]):
-                    for na in range(mask.shape[2]):
-                        pos = (b,t,na)
-                        if mask[pos] == 1:
-                            memory.store(td_error[pos].cpu().detach(),pos)
             selected_num = int(memory_size * self.args.selected_ratio)
-            mini_batch, selected_pos, _ = memory.sample(selected_num)
-            weight = th.zeros_like(td_error)
-            for idxs, pos in enumerate(selected_pos):
-                weight[pos] = 1
-            return weight
+            return  PER_Memory(self.args, td_error).sample(selected_num)
         return th.ones(B,T,self.args.n_agents).cuda()
 
     def _update_targets(self):

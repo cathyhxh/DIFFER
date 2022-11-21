@@ -49,3 +49,5 @@ label: "default_label"
 # --- Selected paras --- #
 selected: 'greedy'
 selected_ratio: 0.9
+selected_alpha: 0.6
+selected_epsilon: 0.01
