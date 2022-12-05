@@ -129,7 +129,7 @@ class QDivedeLearner:
         q_mask = q_mask.expand_as(q_td_error)
 
         masked_q_td_error = q_td_error * q_mask 
-        q_selected_weight = self.select_trajectory(masked_q_td_error.abs(), q_mask).clone().detach()
+        q_selected_weight = self.select_trajectory(masked_q_td_error.abs(), q_mask, t_env).clone().detach()
         # 0-out the targets that came from padded data
 
         # Normal L2 loss, take mean over actual data
@@ -170,7 +170,7 @@ class QDivedeLearner:
         reward_i = - grad_td + qi - self.args.gamma * (1 - indi_terminated) * target_qi
         return reward_i
 
-    def select_trajectory(self, td_error, mask):
+    def select_trajectory(self, td_error, mask, t_env):
         # td_error (B, T, n_agents)
         if self.args.selected == 'all':
             return th.ones_like(td_error).cuda()
@@ -215,7 +215,11 @@ class QDivedeLearner:
         elif self.args.selected == 'PER_hard':
             memory_size = int(mask.sum().item())
             selected_num = int(memory_size * self.args.selected_ratio)
-            return  PER_Memory(self.args, td_error).sample(selected_num)
+            return  PER_Memory(self.args, td_error, mask).sample(selected_num)
+        elif self.args.selected == 'PER_weight':
+            memory_size = int(mask.sum().item())
+            selected_num = int(memory_size * self.args.selected_ratio)
+            return  PER_Memory(self.args, td_error, mask).sample_weight(selected_num, t_env)
         return th.ones(B,T,self.args.n_agents).cuda()
 
     def _update_targets(self):
