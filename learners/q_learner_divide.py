@@ -182,6 +182,15 @@ class QDivedeLearner:
             pivot = sorted_td[-1]
             weight = th.where(td_error>=pivot, th.ones_like(td_error), th.zeros_like(td_error))
             return weight
+        elif self.args.selected == 'greedy_weight':
+            valid_num = mask.sum().item()
+            selected_num = int(valid_num * self.args.selected_ratio)
+            td_reshape = td_error.reshape(-1)
+            sorted_td, _ = th.topk(td_reshape, selected_num)
+            pivot = sorted_td[-1]
+            weight = th.where(td_error>=pivot, td_error-pivot, th.zeros_like(td_error))
+            norm_weight = weight/weight.max()
+            return norm_weight
         elif self.args.selected == 'PER':
             memory_size = int(mask.sum().item())
             memory = PER_Memory(memory_size)
