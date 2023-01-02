@@ -63,3 +63,12 @@ plot_loss_network: False
 verbose: False
 optimizer: rmsprop
 target_update_mode: hard
+
+
+# --- Selected paras --- #
+selected: 'greedy'
+selected_ratio: 0.9
+selected_alpha: 0.8
+selected_epsilon: 0.01
+beta_start: 0.6
+beta_end: 1

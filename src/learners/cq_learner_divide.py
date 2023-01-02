@@ -4,7 +4,7 @@ from modules.mixers.vdn import VDNMixer
 from modules.mixers.qmix import QMixer
 import torch as th
 from torch.optim import RMSprop, Adam
-
+from ER.prioritized_memory import PER_Memory
 
 class CQLearnerDivide:
     def __init__(self, mac, scheme, logger, args):
@@ -246,10 +246,10 @@ class CQLearnerDivide:
         #     memory_size = int(mask.sum().item())
         #     selected_num = int(memory_size * self.args.selected_ratio)
         #     return  PER_Memory(self.args, td_error, mask).sample(selected_num)
-        # elif self.args.selected == 'PER_weight':
-        #     memory_size = int(mask.sum().item())
-        #     selected_num = int(memory_size * self.args.selected_ratio)
-        #     return  PER_Memory(self.args, td_error, mask).sample_weight(selected_num, t_env)
+        elif self.args.selected == 'PER_weight':
+            memory_size = int(mask.sum().item())
+            selected_num = int(memory_size * self.args.selected_ratio)
+            return  PER_Memory(self.args, td_error, mask).sample_weight(selected_num, t_env)
         return th.ones(B,T,self.args.n_agents).cuda()
 
     def _update_targets_soft(self, tau):

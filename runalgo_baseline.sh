@@ -5,12 +5,13 @@ algo="comix_pp"
 echo ${env}
 echo ${agent_conf}
 echo ${algo}
-for i in {1..3}
+device="3"
+for i in {4..5}
 do
         name1="huxh-${algo}-${env}-$i"
         docker stop $name1
         docker rm $name1
-        docker run --gpus "device=$i" -itd --user $(id -u ${USER}):$(id -g ${USER})\
+        docker run --gpus "device=$device" -itd --user $(id -u ${USER}):$(id -g ${USER})\
                 --name=$name1 --shm-size 8G -v /etc/passwd:/etc/passwd:ro -v /etc/group:/etc/group:ro -v /etc/shadow:/etc/shadow:ro\
                  pymarl:facmac /bin/bash
         #docker exec -d -u root -it $name1 /bin/bash -c "python3 src/main.py --config=${algo} --env-config=mujoco_multi with env_args.scenario_name=${env} env_args.agent_conf=${agent_conf} env_args.agent_obsk=0"
