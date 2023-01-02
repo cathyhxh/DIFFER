@@ -250,7 +250,9 @@ class CQLearnerDivide:
             memory_size = int(mask.sum().item())
             selected_num = int(memory_size * self.args.selected_ratio)
             return  PER_Memory(self.args, td_error, mask).sample_weight(selected_num, t_env)
-        return th.ones(B,T,self.args.n_agents).cuda()
+        else:
+            raise Exception("unknown selected method: {}!".format(getattr(self.args, "selected", "all")))
+            return th.ones(B,T,self.args.n_agents).cuda()
 
     def _update_targets_soft(self, tau):
 
