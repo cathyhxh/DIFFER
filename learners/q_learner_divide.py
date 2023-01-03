@@ -129,7 +129,8 @@ class QDivedeLearner:
         q_mask = q_mask.expand_as(q_td_error)
 
         masked_q_td_error = q_td_error * q_mask 
-        q_selected_weight = self.select_trajectory(masked_q_td_error.abs(), q_mask, t_env).clone().detach()
+        q_selected_weight, selected_ratio = self.select_trajectory(masked_q_td_error.abs(), q_mask, t_env)
+        q_selected_weight = q_selected_weight.clone().detach()
         # 0-out the targets that came from padded data
 
         # Normal L2 loss, take mean over actual data
@@ -146,6 +147,7 @@ class QDivedeLearner:
             self.last_target_update_episode = episode_num
 
         if t_env - self.log_stats_t >= self.args.learner_log_interval:
+            self.logger.log_stat("selected_ratio", selected_ratio, t_env)
             self.logger.log_stat("mixer_loss", mixer_loss.item(), t_env)
             self.logger.log_stat("mixer_grad_norm", mixer_grad_norm, t_env)
             mask_elems = mask.sum().item()
@@ -172,25 +174,33 @@ class QDivedeLearner:
 
     def select_trajectory(self, td_error, mask, t_env):
         # td_error (B, T, n_agents)
+        if self.args.warm_up:
+            if t_env/self.args.t_max<=self.args.warm_up_ratio:
+                selected_ratio = t_env * (self.args.selected_ratio_end - self.args.selected_ratio_start)/(self.args.t_max * self.args.warm_up_ratio) + self.args.selected_ratio_start
+            else:
+                selected_ratio = self.args.selected_ratio_end
+        else:
+            selected_ratio = self.args.selected_ratio
+
         if self.args.selected == 'all':
-            return th.ones_like(td_error).cuda()
+            return th.ones_like(td_error).cuda(), selected_ratio
         elif self.args.selected == 'greedy':
             valid_num = mask.sum().item()
-            selected_num = int(valid_num * self.args.selected_ratio)
+            selected_num = int(valid_num * selected_ratio)
             td_reshape = td_error.reshape(-1)
             sorted_td, _ = th.topk(td_reshape, selected_num)
             pivot = sorted_td[-1]
             weight = th.where(td_error>=pivot, th.ones_like(td_error), th.zeros_like(td_error))
-            return weight
+            return weight, selected_ratio
         elif self.args.selected == 'greedy_weight':
             valid_num = mask.sum().item()
-            selected_num = int(valid_num * self.args.selected_ratio)
+            selected_num = int(valid_num * selected_ratio)
             td_reshape = td_error.reshape(-1)
             sorted_td, _ = th.topk(td_reshape, selected_num)
             pivot = sorted_td[-1]
             weight = th.where(td_error>=pivot, td_error-pivot, th.zeros_like(td_error))
             norm_weight = weight/weight.max()
-            return norm_weight
+            return norm_weight, selected_ratio
         elif self.args.selected == 'PER':
             memory_size = int(mask.sum().item())
             memory = PER_Memory(memory_size)
@@ -200,36 +210,20 @@ class QDivedeLearner:
                         pos = (b,t,na)
                         if mask[pos] == 1:
                             memory.store(td_error[pos].cpu().detach(),pos)
-            selected_num = int(memory_size * self.args.selected_ratio)
+            selected_num = int(memory_size * selected_ratio)
             mini_batch, selected_pos, is_weight = memory.sample(selected_num)
             weight = th.zeros_like(td_error)
             for idxs, pos in enumerate(selected_pos):
                 weight[pos] += is_weight[idxs]
-            return weight
-        # elif self.args.selected == 'PER_hard':
-        #     memory_size = int(mask.sum().item())
-        #     memory = PER_Memory(memory_size)
-        #     for b in range(mask.shape[0]):
-        #         for t in range(mask.shape[1]):
-        #             for na in range(mask.shape[2]):
-        #                 pos = (b,t,na)
-        #                 if mask[pos] == 1:
-        #                     memory.store(td_error[pos].cpu().detach(),pos)
-        #     selected_num = int(memory_size * self.args.selected_ratio)
-        #     mini_batch, selected_pos, _ = memory.sample(selected_num)
-        #     weight = th.zeros_like(td_error)
-        #     for idxs, pos in enumerate(selected_pos):
-        #         weight[pos] = 1
-        #     return weight
+            return weight, selected_ratio
         elif self.args.selected == 'PER_hard':
             memory_size = int(mask.sum().item())
-            selected_num = int(memory_size * self.args.selected_ratio)
-            return  PER_Memory(self.args, td_error, mask).sample(selected_num)
+            selected_num = int(memory_size * selected_ratio)
+            return  PER_Memory(self.args, td_error, mask).sample(selected_num), selected_ratio
         elif self.args.selected == 'PER_weight':
             memory_size = int(mask.sum().item())
-            selected_num = int(memory_size * self.args.selected_ratio)
-            return  PER_Memory(self.args, td_error, mask).sample_weight(selected_num, t_env)
-        return th.ones(B,T,self.args.n_agents).cuda()
+            selected_num = int(memory_size * selected_ratio)
+            return  PER_Memory(self.args, td_error, mask).sample_weight(selected_num, t_env), selected_ratio
 
     def _update_targets(self):
         self.target_mac.load_state(self.mac)
