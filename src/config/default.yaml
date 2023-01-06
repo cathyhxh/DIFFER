@@ -68,7 +68,12 @@ target_update_mode: hard
 # --- Selected paras --- #
 selected: 'greedy'
 selected_ratio: 0.9
-selected_alpha: 0.8
+warm_up: True
+selected_ratio_start: 0.8
+selected_ratio_end: 1.0
+warm_up_ratio: 0.6
+
+selected_alpha: 0.6
 selected_epsilon: 0.01
 beta_start: 0.6
 beta_end: 1
