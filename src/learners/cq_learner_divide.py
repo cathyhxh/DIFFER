@@ -138,11 +138,11 @@ class CQLearnerDivide:
 
         masked_q_td_error = q_td_error * q_mask 
         q_selected_weight, selected_ratio = self.select_trajectory(masked_q_td_error.abs(), q_mask, t_env)
-        q_selected_weight = q_selected_weight.clone().detach()
+        q_selected_weight_clone = q_selected_weight.cuda().clone().detach()
         # 0-out the targets that came from padded data
 
         # Normal L2 loss, take mean over actual data
-        q_loss = (masked_q_td_error ** 2 * q_selected_weight).sum() / q_mask.sum()
+        q_loss = (masked_q_td_error ** 2 * q_selected_weight_clone).sum() / q_mask.sum()
 
         # Optimise
         self.q_optimiser.zero_grad()
@@ -182,7 +182,7 @@ class CQLearnerDivide:
             self.logger.log_stat("q_q_taken_mean", (chosen_action_qvals * q_mask).sum().item()/(q_mask_elems), t_env)
             self.logger.log_stat("mixer_target_mean", (q_targets * q_mask).sum().item()/(q_mask_elems), t_env)
             self.logger.log_stat("reward_i_mean", (q_rewards * q_mask).sum().item()/(q_mask_elems), t_env)
-            self.logger.log_stat("q_selected_weight_mean", (q_selected_weight * q_mask).sum().item()/(q_mask_elems), t_env)
+            self.logger.log_stat("q_selected_weight_mean", (q_selected_weight_clone * q_mask).sum().item()/(q_mask_elems), t_env)
 
             self.log_stats_t = t_env
 
