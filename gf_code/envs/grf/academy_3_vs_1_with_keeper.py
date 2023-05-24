@@ -75,7 +75,39 @@ class Academy_3_vs_1_with_Keeper(MultiAgentEnv):
         self.unit_dim = self.obs_dim  # QPLEX unit_dim  for cds_gfootball
         # self.unit_dim = 6  # QPLEX unit_dim set as that in Starcraft II
 
+        self.sight_range = 0.4  
 
+    def get_simple_obs_perfect(self, index=-1):
+        full_obs = self.env.unwrapped.observation()[0]
+        simple_obs = []
+
+        # local state, relative position
+        ego_position = full_obs['left_team'][-self.n_agents +
+                                                index].reshape(-1)
+        
+        simple_obs.append(ego_position)
+        simple_obs.append((np.delete(
+            full_obs['left_team'][-self.n_agents:], index, axis=0) - ego_position).reshape(-1))
+        
+        simple_obs.append(
+            full_obs['left_team_direction'][-self.n_agents + index].reshape(-1))
+        
+        simple_obs.append(np.delete(
+            full_obs['left_team_direction'][-self.n_agents:], index, axis=0).reshape(-1))
+
+        simple_obs.append(
+            (full_obs['right_team'] - ego_position).reshape(-1))
+        simple_obs.append(full_obs['right_team_direction'].reshape(-1))
+
+        simple_obs.append(full_obs['ball'][:2] - ego_position)
+        simple_obs.append(full_obs['ball'][-1].reshape(-1))
+        simple_obs.append(full_obs['ball_direction'])
+
+        simple_obs = np.concatenate(simple_obs)
+        return simple_obs
+
+    def cal_dist(self, pos):
+        return np.linalg.norm(pos, ord=2)
 
     def get_simple_obs(self, index=-1):
         full_obs = self.env.unwrapped.observation()[0]
@@ -98,22 +130,67 @@ class Academy_3_vs_1_with_Keeper(MultiAgentEnv):
             # local state, relative position
             ego_position = full_obs['left_team'][-self.n_agents +
                                                  index].reshape(-1)
+            
             simple_obs.append(ego_position)
-            simple_obs.append((np.delete(
-                full_obs['left_team'][-self.n_agents:], index, axis=0) - ego_position).reshape(-1))
 
+            ally_pos_1, ally_pos_2 = np.split((np.delete(full_obs['left_team'][-self.n_agents:], index, axis=0) - ego_position).reshape(-1), 2)
+            
+            ally_dist_1 = self.cal_dist(ally_pos_1)
+            if ally_dist_1 > self.sight_range:
+                simple_obs.append(np.array([-1,-1]))
+            else:
+                simple_obs.append(ally_pos_1)
+
+            ally_dist_2 = self.cal_dist(ally_pos_2)
+            if ally_dist_2 > self.sight_range:
+                simple_obs.append(np.array([-1,-1]))
+            else:
+                simple_obs.append(ally_pos_2)
+            
             simple_obs.append(
                 full_obs['left_team_direction'][-self.n_agents + index].reshape(-1))
-            simple_obs.append(np.delete(
-                full_obs['left_team_direction'][-self.n_agents:], index, axis=0).reshape(-1))
 
-            simple_obs.append(
-                (full_obs['right_team'] - ego_position).reshape(-1))
-            simple_obs.append(full_obs['right_team_direction'].reshape(-1))
+            ally_direc_1, ally_direc_2 = np.split(np.delete(full_obs['left_team_direction'][-self.n_agents:], index, axis=0).reshape(-1), 2)
+            if ally_dist_1 > self.sight_range:
+                simple_obs.append(np.array([-1,-1]))
+            else:
+                simple_obs.append(ally_direc_1)
+            if ally_dist_2 > self.sight_range:
+                simple_obs.append(np.array([-1,-1]))
+            else:
+                simple_obs.append(ally_direc_2)    
+            
+            enemy_pos_1, enemy_pos_2 = np.split((full_obs['right_team'] - ego_position).reshape(-1), 2)
+            enemy_dist_1 = self.cal_dist(enemy_pos_1)
+            if enemy_dist_1 > self.sight_range:
+                simple_obs.append(np.array([-1,-1]))
+            else:
+                simple_obs.append(enemy_pos_1)
 
-            simple_obs.append(full_obs['ball'][:2] - ego_position)
-            simple_obs.append(full_obs['ball'][-1].reshape(-1))
-            simple_obs.append(full_obs['ball_direction'])
+            enemy_dist_2 = self.cal_dist(enemy_pos_2)
+            if enemy_dist_2 > self.sight_range:
+                simple_obs.append(np.array([-1,-1]))
+            else:
+                simple_obs.append(enemy_pos_2)
+
+            enemy_direc_1, enemy_direc_2 = np.split(full_obs['right_team_direction'].reshape(-1), 2)
+            if enemy_dist_1 > self.sight_range:
+                simple_obs.append(np.array([-1,-1]))
+            else:
+                simple_obs.append(enemy_direc_1)
+            if enemy_dist_2 > self.sight_range:
+                simple_obs.append(np.array([-1,-1]))
+            else:
+                simple_obs.append(enemy_direc_2)    
+
+            ball_pos = full_obs['ball'][:2] - ego_position
+            ball_dist = self.cal_dist(ball_pos)
+            if ball_dist > self.sight_range:
+                simple_obs.append(np.array([-1, -1, -1, -1, -1, -1]))
+            else:
+                simple_obs.append(ball_pos)
+                simple_obs.append(full_obs['ball'][-1].reshape(-1))
+                simple_obs.append(full_obs['ball_direction'])
 
         simple_obs = np.concatenate(simple_obs)
         return simple_obs
